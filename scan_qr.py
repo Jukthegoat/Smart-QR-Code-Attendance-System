@@ -14,7 +14,7 @@ if not os.path.exists(excel_file):
     workbook = openpyxl.Workbook()
     sheet = workbook.active
     sheet.title = 'Attendance'
-    sheet.append(["Student ID", "Name", "Timestamp"])
+    sheet.append(["Order", "Student ID", "Name", "Timestamp"])
     workbook.save(excel_file)
 
 # Initialize SQLite database
@@ -23,28 +23,44 @@ def initialize_db():
     cursor = connection.cursor()
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS Attendance (
+            order_id INTEGER PRIMARY KEY AUTOINCREMENT,
             student_id TEXT,
             name TEXT,
-            timestamp TEXT
+            date TEXT,
+            timestamp TEXT,
+            UNIQUE(student_id, date)
         )
     ''')
     connection.commit()
     connection.close()
 
-# Function to store data in SQLite database
+# Function to check and store data in SQLite database
 def store_in_db(student_id, name):
     connection = sqlite3.connect(db_file)
     cursor = connection.cursor()
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    date = datetime.now().strftime("%Y-%m-%d")
+
+    # Check if the student has already marked attendance today
     cursor.execute('''
-        INSERT INTO Attendance (student_id, name, timestamp)
-        VALUES (?, ?, ?)
-    ''', (student_id, name, timestamp))
+        SELECT * FROM Attendance
+        WHERE student_id = ? AND date = ?
+    ''', (student_id, date))
+    if cursor.fetchone():
+        print(f"Attendance already marked for {name} today.")
+        connection.close()
+        return None
+
+    # Insert record and fetch order_id
+    cursor.execute('''
+        INSERT INTO Attendance (student_id, name, date, timestamp)
+        VALUES (?, ?, ?, ?)
+    ''', (student_id, name, date, timestamp))
+    order_id = cursor.lastrowid
     connection.commit()
     connection.close()
-
-# Set to track students who have already scanned
-scanned_students = set()
+    print(f"Attendance marked for {name}.")
+    return order_id, timestamp
 
 def mark_attendance(data):
     # Open the workbook and select the active sheet
@@ -56,22 +72,15 @@ def mark_attendance(data):
     student_id = student_info[0].split(': ')[1]
     name = student_info[1].split(': ')[1]
 
-    # Check if the student ID is already scanned
-    if student_id in scanned_students:
-        print(f"Attendance already marked for: {name}")
+    # Check and store attendance in the database
+    result = store_in_db(student_id, name)
+    if not result:
         return
+    order_id, timestamp = result
 
     # Append new data to Excel
-    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    sheet.append([student_id, name, timestamp])
+    sheet.append([order_id, student_id, name, timestamp])
     workbook.save(excel_file)
-
-    # Store data in SQLite
-    store_in_db(student_id, name)
-
-    # Add the student ID to the set to prevent duplicate scans
-    scanned_students.add(student_id)
-    print(f"Attendance marked for: {name}")
 
 def scan_qr_code():
     cap = cv2.VideoCapture(0)
@@ -81,7 +90,6 @@ def scan_qr_code():
         decoded_objects = decode(frame)
         for obj in decoded_objects:
             data = obj.data.decode('utf-8')
-            # Mark attendance only if the student hasn't scanned yet
             mark_attendance(data)
             print(f"Scanned Data: {data}")
 
@@ -107,6 +115,6 @@ if __name__ == "__main__":
             scan_qr_code()
         elif choice == '2':
             print("Exiting...")
-            breakq
+            break
         else:
             print("Invalid choice. Please try again.")
