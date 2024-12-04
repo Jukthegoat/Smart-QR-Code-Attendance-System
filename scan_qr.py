@@ -26,9 +26,8 @@ def initialize_db():
             order_id INTEGER PRIMARY KEY AUTOINCREMENT,
             student_id TEXT,
             name TEXT,
-            date TEXT,
             timestamp TEXT,
-            UNIQUE(student_id, date)
+            UNIQUE(student_id, timestamp)
         )
     ''')
     connection.commit()
@@ -39,13 +38,12 @@ def store_in_db(student_id, name):
     connection = sqlite3.connect(db_file)
     cursor = connection.cursor()
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    date = datetime.now().strftime("%Y-%m-%d")
 
     # Check if the student has already marked attendance today
     cursor.execute('''
         SELECT * FROM Attendance
-        WHERE student_id = ? AND date = ?
-    ''', (student_id, date))
+        WHERE student_id = ? AND DATE(timestamp) = DATE(?)
+    ''', (student_id, timestamp))
     if cursor.fetchone():
         print(f"Attendance already marked for {name} today.")
         connection.close()
@@ -53,9 +51,9 @@ def store_in_db(student_id, name):
 
     # Insert record and fetch order_id
     cursor.execute('''
-        INSERT INTO Attendance (student_id, name, date, timestamp)
-        VALUES (?, ?, ?, ?)
-    ''', (student_id, name, date, timestamp))
+        INSERT INTO Attendance (student_id, name, timestamp)
+        VALUES (?, ?, ?)
+    ''', (student_id, name, timestamp))
     order_id = cursor.lastrowid
     connection.commit()
     connection.close()
@@ -95,7 +93,7 @@ def scan_qr_code():
         for obj in decoded_objects:
             data = obj.data.decode('utf-8')
             mark_attendance(data)
-            print(f"Scannedq Data: {data}")
+            print(f"Scanned Data: {data}")
 
         cv2.imshow("QR Code Scanner", frame)
 
