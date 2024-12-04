@@ -87,11 +87,15 @@ def scan_qr_code():
 
     while True:
         _, frame = cap.read()
+
+        # Flip the frame horizontally
+        frame = cv2.flip(frame, 1)  # Change 1 to 0 for vertical flip, or -1 for both axes
+
         decoded_objects = decode(frame)
         for obj in decoded_objects:
             data = obj.data.decode('utf-8')
             mark_attendance(data)
-            print(f"Scanned Data: {data}")
+            print(f"Scannedq Data: {data}")
 
         cv2.imshow("QR Code Scanner", frame)
 
@@ -100,6 +104,7 @@ def scan_qr_code():
 
     cap.release()
     cv2.destroyAllWindows()
+
 
 if __name__ == "__main__":
     # Initialize database
